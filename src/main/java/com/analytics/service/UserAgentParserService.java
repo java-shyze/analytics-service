@@ -59,7 +59,7 @@ public class UserAgentParserService {
      */
     private String mapDeviceType(DeviceType deviceType) {
         if (deviceType == null) {
-            return "Unknown";
+            return "Other";
         }
 
         return switch (deviceType) {
@@ -69,7 +69,7 @@ public class UserAgentParserService {
             case DMR -> "Media Renderer";
             case GAME_CONSOLE -> "Game Console";
             case WEARABLE -> "Wearable";
-            default -> "Unknown";
+            default -> "Other";
         };
     }
 }

@@ -28,7 +28,7 @@ services:
       ANALYTICS_DB_URL: jdbc:postgresql://analytics-db:5432/${ANALYTICS_DB_NAME}
       ANALYTICS_DB_USERNAME: ${ANALYTICS_DB_USERNAME}
       ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD}
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:redpanda:9092} 
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
     depends_on:
       analytics-db:
         condition: service_healthy

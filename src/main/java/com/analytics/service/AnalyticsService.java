@@ -7,11 +7,12 @@ import com.analytics.repository.LinkClickRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.LocalDateTime;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class AnalyticsService {
@@ -22,12 +23,6 @@ public class AnalyticsService {
     @Autowired
     private UserAgentParserService userAgentParser;
 
-    @Autowired
-    private GeoLocationService geoLocationService;
-
-    /**
-     * Сохраняет клик с полной аналитической информацией
-     */
     public LinkClick saveClick(Long linkId, String alias, String originalUrl,
                                String ipAddress, String userAgent, String referer) {
         LinkClick click = new LinkClick(linkId, alias);
@@ -37,73 +32,131 @@ public class AnalyticsService {
         click.setUserAgent(userAgent);
         click.setReferer(referer);
 
-        // Парсим User-Agent
         Map<String, String> uaInfo = userAgentParser.parseUserAgent(userAgent);
         click.setBrowser(uaInfo.get("browser"));
         click.setBrowserVersion(uaInfo.get("browserVersion"));
         click.setOperatingSystem(uaInfo.get("operatingSystem"));
         click.setDeviceType(uaInfo.get("deviceType"));
 
-        // Определяем геолокацию
-        Map<String, String> geoInfo = geoLocationService.getGeoLocation(ipAddress);
-        click.setCountry(geoInfo.get("country"));
-        click.setCountryCode(geoInfo.get("countryCode"));
-        click.setCity(geoInfo.get("city"));
-
         return clickRepository.save(click);
     }
 
-    /**
-     * Получает полную аналитику по alias
-     */
-    public LinkAnalyticsResponse getAnalytics(String alias) {
+    public LinkAnalyticsResponse getAnalytics(String alias, LocalDateTime start, LocalDateTime end, boolean allTime) {
         LinkAnalyticsResponse response = new LinkAnalyticsResponse();
         response.setAlias(alias);
 
-        // Общее количество кликов
-        long totalClicks = clickRepository.countByAlias(alias);
+        LocalDateTime actualStart;
+        LocalDateTime actualEnd;
+
+        if (allTime) {
+            actualStart = LocalDateTime.of(1970, 1, 1, 0, 0);
+            actualEnd = LocalDateTime.now().plusYears(10);
+        } else {
+            actualEnd = (end != null) ? end : LocalDateTime.now();
+            actualStart = (start != null) ? start : actualEnd.minusDays(30);
+        }
+
+        LinkAnalyticsResponse.DateRange period = new LinkAnalyticsResponse.DateRange();
+        period.setStart(actualStart);
+        period.setEnd(actualEnd);
+        response.setPeriod(period);
+
+        long totalClicks = clickRepository.countByAliasInRange(alias, actualStart, actualEnd);
         response.setTotalClicks(totalClicks);
 
-        // Уникальные клики
-        long uniqueClicks = clickRepository.countUniqueClicksByAlias(alias);
+        long uniqueClicks = clickRepository.countUniqueByAliasInRange(alias, actualStart, actualEnd);
         response.setUniqueClicks(uniqueClicks);
 
-        // Статистика по браузерам
-        List<Map<String, Object>> browserStats = clickRepository.getBrowserStats(alias);
-        response.setBrowserStats(convertToStats(browserStats));
+        response.setBrowserStats(buildStats(clickRepository.getBrowserStatsInRange(alias, actualStart, actualEnd), totalClicks));
+        response.setDeviceStats(buildStats(clickRepository.getDeviceStatsInRange(alias, actualStart, actualEnd), totalClicks));
+        response.setTopReferrers(buildStats(clickRepository.getTopReferrersInRange(alias, actualStart, actualEnd), totalClicks));
 
-        // Статистика по устройствам
-        List<Map<String, Object>> deviceStats = clickRepository.getDeviceStats(alias);
-        response.setDeviceStats(convertToStats(deviceStats));
-
-        // Статистика по странам
-        List<Map<String, Object>> countryStats = clickRepository.getCountryStats(alias);
-        response.setCountryStats(convertToCountryStats(countryStats));
-
-        // Клики по месяцам
-        List<Map<String, Object>> monthlyStats = clickRepository.getClicksByMonth(alias);
-        response.setMonthlyStats(convertToTimeSeries(monthlyStats));
-
-        // Клики по дням (последние 30 дней)
-        LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
-        List<Map<String, Object>> dailyStats = clickRepository.getClicksByDay(alias, thirtyDaysAgo);
-        response.setDailyStats(convertToTimeSeries(dailyStats));
-
-        // Топ referrers
-        List<Map<String, Object>> topReferrers = clickRepository.getTopReferrers(alias);
-        response.setTopReferrers(convertToStats(topReferrers));
+        LinkAnalyticsResponse.GlobalStats globalStats = new LinkAnalyticsResponse.GlobalStats();
+        globalStats.setData(convertToTimeSeries(clickRepository.getClicksByMonth(alias)));
+        response.setGlobalStats(globalStats);
 
         return response;
     }
 
-    /**
-     * Хеширование IP для подсчета уникальных пользователей (GDPR friendly)
-     */
-    private String hashIp(String ip) {
-        if (ip == null || ip.isEmpty()) {
-            return "unknown";
+    private List<LinkAnalyticsResponse.StatItem> buildStats(List<Map<String, Object>> raw, long total) {
+        return raw.stream()
+            .map(row -> {
+                String rawValue = row.entrySet().stream()
+                    .filter(e -> !e.getKey().equals("count"))
+                    .map(e -> Objects.toString(e.getValue(), null))
+                    .findFirst()
+                    .orElse(null);
+
+                String name = normalizeName(rawValue);
+
+                long count = ((Number) row.get("count")).longValue();
+                double percent = total > 0 ? Math.round(count * 10000.0 / total) / 100.0 : 0.0;
+
+                return new LinkAnalyticsResponse.StatItem(name, count, percent);
+            })
+            .sorted(Comparator.comparingLong((LinkAnalyticsResponse.StatItem s) -> s.getCount()).reversed())
+            .toList();
+    }
+
+    private String normalizeName(String input) {
+        if (input == null || input.isBlank()) {
+            return "Direct";
         }
-        
+
+        String trimmed = input.trim();
+
+        if (trimmed.contains("://") || trimmed.startsWith("www.")) {
+            try {
+                URI uri = new URI(trimmed);
+                String host = uri.getHost();
+                if (host != null) {
+                    return host.startsWith("www.") ? host.substring(4) : host;
+                }
+            } catch (Exception e) {
+            }
+        }
+
+        if ("Unknown".equalsIgnoreCase(trimmed)) {
+            return "Other";
+        }
+
+        if ("direct".equalsIgnoreCase(trimmed)) {
+            return "Direct";
+        }
+
+        return trimmed;
+    }
+
+    private List<TimeSeriesData> convertToTimeSeries(List<Map<String, Object>> stats) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM");
+
+        return stats.stream()
+                .map(row -> {
+                    Object dateObj = row.entrySet().stream()
+                            .filter(e -> !e.getKey().equals("count"))
+                            .map(Map.Entry::getValue)
+                            .findFirst()
+                            .orElse(null);
+
+                    long count = ((Number) row.get("count")).longValue();
+
+                    String dateStr = "Unknown";
+                    if (dateObj instanceof java.sql.Timestamp ts) {
+                        dateStr = ts.toLocalDateTime().withDayOfMonth(1).format(formatter);
+                    } else if (dateObj instanceof LocalDateTime ldt) {
+                        dateStr = ldt.withDayOfMonth(1).format(formatter);
+                    } else if (dateObj != null) {
+                        dateStr = dateObj.toString().substring(0, 7);
+                    }
+
+                    return new TimeSeriesData(dateStr, count);
+                })
+                .sorted(Comparator.comparing(TimeSeriesData::getDate))
+                .toList();
+    }
+
+    private String hashIp(String ip) {
+        if (ip == null || ip.isBlank()) return "unknown";
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(ip.getBytes(StandardCharsets.UTF_8));
@@ -111,64 +164,5 @@ public class AnalyticsService {
         } catch (Exception e) {
             return "error";
         }
-    }
-
-    /**
-     * Конвертация статистики в удобный формат
-     */
-    private Map<String, Long> convertToStats(List<Map<String, Object>> stats) {
-        Map<String, Long> result = new LinkedHashMap<>();
-        for (Map<String, Object> stat : stats) {
-            String key = stat.keySet().stream()
-                .filter(k -> !k.equals("count"))
-                .findFirst()
-                .orElse("unknown");
-            
-            Object value = stat.get(key);
-            Long count = ((Number) stat.get("count")).longValue();
-            
-            String label = value != null ? value.toString() : "Unknown";
-            result.put(label, count);
-        }
-        return result;
-    }
-
-    /**
-     * Конвертация статистики по странам
-     */
-    private Map<String, Map<String, Object>> convertToCountryStats(List<Map<String, Object>> stats) {
-        Map<String, Map<String, Object>> result = new LinkedHashMap<>();
-        for (Map<String, Object> stat : stats) {
-            String country = stat.get("country") != null ? stat.get("country").toString() : "Unknown";
-            String countryCode = stat.get("countryCode") != null ? stat.get("countryCode").toString() : "XX";
-            Long count = ((Number) stat.get("count")).longValue();
-            
-            Map<String, Object> countryData = new HashMap<>();
-            countryData.put("code", countryCode);
-            countryData.put("count", count);
-            
-            result.put(country, countryData);
-        }
-        return result;
-    }
-
-    /**
-     * Конвертация временных рядов
-     */
-    private List<TimeSeriesData> convertToTimeSeries(List<Map<String, Object>> stats) {
-        return stats.stream()
-            .map(stat -> {
-                Object dateObj = stat.keySet().stream()
-                    .filter(k -> !k.equals("count"))
-                    .map(stat::get)
-                    .findFirst()
-                    .orElse(null);
-                
-                Long count = ((Number) stat.get("count")).longValue();
-                
-                String dateStr = dateObj != null ? dateObj.toString() : "Unknown";
-                return new TimeSeriesData(dateStr, count);
-            })
-            .collect(Collectors.toList());
     }
 }
