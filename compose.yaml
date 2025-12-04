@@ -1,0 +1,46 @@
+# compose.yaml
+services:
+  analytics-db:
+    image: postgres:15
+    container_name: analytics-postgres-db
+    environment:
+      POSTGRES_DB: ${ANALYTICS_DB_NAME}
+      POSTGRES_USER: ${ANALYTICS_DB_USERNAME}
+      POSTGRES_PASSWORD: ${ANALYTICS_DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - analytics-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app-network 
+
+  analytics-service:
+    build: .
+    container_name: analytics-service
+    ports:
+      - "8081:8081"
+    environment:
+      ANALYTICS_DB_URL: jdbc:postgresql://analytics-db:5432/${ANALYTICS_DB_NAME}
+      ANALYTICS_DB_USERNAME: ${ANALYTICS_DB_USERNAME}
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:redpanda:9092} 
+    depends_on:
+      analytics-db:
+        condition: service_healthy
+    networks:
+      - app-network        
+      - kafka-network      
+    restart: on-failure
+
+volumes:
+  analytics-pgdata:
+
+networks:
+  app-network:             
+  kafka-network:
+    external: true
