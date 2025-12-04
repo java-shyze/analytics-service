@@ -8,7 +8,6 @@ import java.time.LocalDateTime;
     @Index(name = "idx_link_id", columnList = "linkId"),
     @Index(name = "idx_alias", columnList = "alias"),
     @Index(name = "idx_clicked_at", columnList = "clickedAt"),
-    @Index(name = "idx_country", columnList = "country"),
     @Index(name = "idx_ip_hash", columnList = "ipHash")
 })
 public class LinkClick {
@@ -48,16 +47,6 @@ public class LinkClick {
 
     @Column(name = "user_agent", length = 500)
     private String userAgent;
-
-    // Geo информация
-    @Column(name = "country", length = 100)
-    private String country;
-
-    @Column(name = "country_code", length = 10)
-    private String countryCode;
-
-    @Column(name = "city", length = 100)
-    private String city;
 
     // Referrer
     @Column(name = "referer", length = 500)
@@ -118,15 +107,6 @@ public class LinkClick {
 
     public String getUserAgent() { return userAgent; }
     public void setUserAgent(String userAgent) { this.userAgent = userAgent; }
-
-    public String getCountry() { return country; }
-    public void setCountry(String country) { this.country = country; }
-
-    public String getCountryCode() { return countryCode; }
-    public void setCountryCode(String countryCode) { this.countryCode = countryCode; }
-
-    public String getCity() { return city; }
-    public void setCity(String city) { this.city = city; }
 
     public String getReferer() { return referer; }
     public void setReferer(String referer) { this.referer = referer; }

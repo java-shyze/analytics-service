@@ -56,13 +56,6 @@
             <version>1.21</version>
         </dependency>
         
-        <!-- GeoIP для определения страны по IP -->
-        <dependency>
-            <groupId>com.maxmind.geoip2</groupId>
-            <artifactId>geoip2</artifactId>
-            <version>4.2.0</version>
-        </dependency>
-        
         <!-- JSON -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

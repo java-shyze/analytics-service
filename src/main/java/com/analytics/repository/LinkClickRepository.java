@@ -13,62 +13,81 @@ import java.util.Map;
 @Repository
 public interface LinkClickRepository extends JpaRepository<LinkClick, Long> {
 
-    // Общее количество кликов по alias
-    long countByAlias(String alias);
+       // Общее количество кликов по alias
+       long countByAlias(String alias);
 
-    // Уникальные клики (по IP hash)
-    @Query("SELECT COUNT(DISTINCT lc.ipHash) FROM LinkClick lc WHERE lc.alias = :alias")
-    long countUniqueClicksByAlias(@Param("alias") String alias);
+       // Уникальные клики (по IP hash)
+       @Query("SELECT COUNT(DISTINCT lc.ipHash) FROM LinkClick lc WHERE lc.alias = :alias")
+       long countUniqueClicksByAlias(@Param("alias") String alias);
 
-    // Клики за период
-    @Query("SELECT lc FROM LinkClick lc WHERE lc.alias = :alias " +
-           "AND lc.clickedAt BETWEEN :startDate AND :endDate " +
-           "ORDER BY lc.clickedAt DESC")
-    List<LinkClick> findClicksByAliasAndDateRange(
-        @Param("alias") String alias,
-        @Param("startDate") LocalDateTime startDate,
-        @Param("endDate") LocalDateTime endDate
-    );
+       // Клики за период
+       @Query("SELECT lc FROM LinkClick lc WHERE lc.alias = :alias " +
+              "AND lc.clickedAt BETWEEN :startDate AND :endDate " +
+              "ORDER BY lc.clickedAt DESC")
+       List<LinkClick> findClicksByAliasAndDateRange(
+              @Param("alias") String alias,
+              @Param("startDate") LocalDateTime startDate,
+              @Param("endDate") LocalDateTime endDate
+       );
 
-    // Статистика по браузерам
-    @Query("SELECT lc.browser as browser, COUNT(lc) as count " +
-           "FROM LinkClick lc WHERE lc.alias = :alias " +
-           "GROUP BY lc.browser ORDER BY count DESC")
-    List<Map<String, Object>> getBrowserStats(@Param("alias") String alias);
+       // Статистика по браузерам
+       @Query("SELECT lc.browser as browser, COUNT(lc) as count " +
+              "FROM LinkClick lc WHERE lc.alias = :alias " +
+              "GROUP BY lc.browser ORDER BY count DESC")
+       List<Map<String, Object>> getBrowserStats(@Param("alias") String alias);
 
-    // Статистика по устройствам
-    @Query("SELECT lc.deviceType as deviceType, COUNT(lc) as count " +
-           "FROM LinkClick lc WHERE lc.alias = :alias " +
-           "GROUP BY lc.deviceType ORDER BY count DESC")
-    List<Map<String, Object>> getDeviceStats(@Param("alias") String alias);
+       // Статистика по устройствам
+       @Query("SELECT lc.deviceType as deviceType, COUNT(lc) as count " +
+              "FROM LinkClick lc WHERE lc.alias = :alias " +
+              "GROUP BY lc.deviceType ORDER BY count DESC")
+       List<Map<String, Object>> getDeviceStats(@Param("alias") String alias);
 
-    // Статистика по странам
-    @Query("SELECT lc.country as country, lc.countryCode as countryCode, COUNT(lc) as count " +
-           "FROM LinkClick lc WHERE lc.alias = :alias AND lc.country IS NOT NULL " +
-           "GROUP BY lc.country, lc.countryCode ORDER BY count DESC")
-    List<Map<String, Object>> getCountryStats(@Param("alias") String alias);
+       // Статистика кликов по месяцам
+       @Query("SELECT FUNCTION('DATE_TRUNC', 'month', lc.clickedAt) as month, COUNT(lc) as count " +
+              "FROM LinkClick lc WHERE lc.alias = :alias " +
+              "GROUP BY FUNCTION('DATE_TRUNC', 'month', lc.clickedAt) " +
+              "ORDER BY month DESC")
+       List<Map<String, Object>> getClicksByMonth(@Param("alias") String alias);
 
-    // Статистика кликов по месяцам
-    @Query("SELECT FUNCTION('DATE_TRUNC', 'month', lc.clickedAt) as month, COUNT(lc) as count " +
-           "FROM LinkClick lc WHERE lc.alias = :alias " +
-           "GROUP BY FUNCTION('DATE_TRUNC', 'month', lc.clickedAt) " +
-           "ORDER BY month DESC")
-    List<Map<String, Object>> getClicksByMonth(@Param("alias") String alias);
+       // Статистика кликов по дням (последние N дней)
+       @Query("SELECT FUNCTION('DATE', lc.clickedAt) as date, COUNT(lc) as count " +
+              "FROM LinkClick lc WHERE lc.alias = :alias " +
+              "AND lc.clickedAt >= :startDate " +
+              "GROUP BY FUNCTION('DATE', lc.clickedAt) " +
+              "ORDER BY date DESC")
+       List<Map<String, Object>> getClicksByDay(
+              @Param("alias") String alias,
+              @Param("startDate") LocalDateTime startDate
+       );
 
-    // Статистика кликов по дням (последние N дней)
-    @Query("SELECT FUNCTION('DATE', lc.clickedAt) as date, COUNT(lc) as count " +
-           "FROM LinkClick lc WHERE lc.alias = :alias " +
-           "AND lc.clickedAt >= :startDate " +
-           "GROUP BY FUNCTION('DATE', lc.clickedAt) " +
-           "ORDER BY date DESC")
-    List<Map<String, Object>> getClicksByDay(
-        @Param("alias") String alias,
-        @Param("startDate") LocalDateTime startDate
-    );
+       // Топ referrers
+       @Query("SELECT lc.referer as referer, COUNT(lc) as count " +
+              "FROM LinkClick lc WHERE lc.alias = :alias AND lc.referer IS NOT NULL " +
+              "GROUP BY lc.referer ORDER BY count DESC")
+       List<Map<String, Object>> getTopReferrers(@Param("alias") String alias);
 
-    // Топ referrers
-    @Query("SELECT lc.referer as referer, COUNT(lc) as count " +
-           "FROM LinkClick lc WHERE lc.alias = :alias AND lc.referer IS NOT NULL " +
-           "GROUP BY lc.referer ORDER BY count DESC")
-    List<Map<String, Object>> getTopReferrers(@Param("alias") String alias);
+
+       @Query("SELECT COUNT(lc) FROM LinkClick lc WHERE lc.alias = :alias AND lc.clickedAt BETWEEN :start AND :end")
+       long countByAliasInRange(@Param("alias") String alias, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+       
+       @Query("SELECT COUNT(DISTINCT lc.ipHash) FROM LinkClick lc WHERE lc.alias = :alias AND lc.clickedAt BETWEEN :start AND :end")
+       long countUniqueByAliasInRange(@Param("alias") String alias, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+       @Query("SELECT lc.browser AS browser, COUNT(lc) AS count FROM LinkClick lc WHERE lc.alias = :alias AND lc.clickedAt BETWEEN :start AND :end GROUP BY lc.browser ORDER BY count DESC")
+       List<Map<String, Object>> getBrowserStatsInRange(@Param("alias") String alias, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+       @Query("SELECT lc.deviceType AS deviceType, COUNT(lc) AS count FROM LinkClick lc WHERE lc.alias = :alias AND lc.clickedAt BETWEEN :start AND :end GROUP BY lc.deviceType ORDER BY count DESC")
+       List<Map<String, Object>> getDeviceStatsInRange(@Param("alias") String alias, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+       @Query("SELECT COALESCE(lc.referer, 'direct') AS referer, COUNT(lc) AS count FROM LinkClick lc WHERE lc.alias = :alias AND lc.clickedAt BETWEEN :start AND :end GROUP BY COALESCE(lc.referer, 'direct') ORDER BY count DESC LIMIT 10")
+       List<Map<String, Object>> getTopReferrersInRange(@Param("alias") String alias, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+       @Query("SELECT FUNCTION('DATE_TRUNC', 'hour', lc.clickedAt) AS hour, COUNT(lc) AS count FROM LinkClick lc WHERE lc.alias = :alias AND lc.clickedAt BETWEEN :start AND :end GROUP BY hour ORDER BY hour")
+       List<Map<String, Object>> getClicksByHour(@Param("alias") String alias, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+       @Query("SELECT FUNCTION('DATE', lc.clickedAt) AS date, COUNT(lc) AS count FROM LinkClick lc WHERE lc.alias = :alias AND lc.clickedAt BETWEEN :start AND :end GROUP BY date ORDER BY date")
+       List<Map<String, Object>> getClicksByDay(@Param("alias") String alias, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+       @Query("SELECT FUNCTION('DATE_TRUNC', 'month', lc.clickedAt) AS month, COUNT(lc) AS count FROM LinkClick lc WHERE lc.alias = :alias AND lc.clickedAt BETWEEN :start AND :end GROUP BY month ORDER BY month")
+       List<Map<String, Object>> getClicksByMonthInRange(@Param("alias") String alias, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }
