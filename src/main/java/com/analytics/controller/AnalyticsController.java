@@ -10,10 +10,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 
 @Tag(name = "Analytics API", description = "Аналитика по коротким ссылкам")
 @RestController
-@RequestMapping("/api/analytics")
+@RequestMapping("/api/v1/analytics")
 @CrossOrigin(origins = "*")
 public class AnalyticsController {
 
@@ -28,7 +30,13 @@ public class AnalyticsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
             @RequestParam(defaultValue = "false") boolean allTime) {
 
-        LinkAnalyticsResponse analytics = analyticsService.getAnalytics(alias, start, end, allTime);
+        ZonedDateTime startUtc = start != null ? start.atZone(ZoneOffset.UTC) : null;
+        ZonedDateTime endUtc = end != null ? end.atZone(ZoneOffset.UTC) : null;
+
+        LocalDateTime startLdt = startUtc != null ? startUtc.toLocalDateTime() : null;
+        LocalDateTime endLdt = endUtc != null ? endUtc.toLocalDateTime() : null;
+
+        LinkAnalyticsResponse analytics = analyticsService.getAnalytics(alias, startLdt, endLdt, allTime);
         return ResponseEntity.ok(analytics);
     }
 

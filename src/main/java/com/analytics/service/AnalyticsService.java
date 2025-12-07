@@ -46,13 +46,12 @@ public class AnalyticsService {
         response.setAlias(alias);
 
         LocalDateTime actualStart;
-        LocalDateTime actualEnd;
+        LocalDateTime actualEnd= LocalDateTime.now(ZoneOffset.UTC);
 
         if (allTime) {
             actualStart = LocalDateTime.of(1970, 1, 1, 0, 0);
-            actualEnd = LocalDateTime.now().plusYears(10);
         } else {
-            actualEnd = (end != null) ? end : LocalDateTime.now();
+            actualEnd = (end != null) ? end.withNano(0).plusDays(1).minusNanos(1) : actualEnd; 
             actualStart = (start != null) ? start : actualEnd.minusDays(30);
         }
 
