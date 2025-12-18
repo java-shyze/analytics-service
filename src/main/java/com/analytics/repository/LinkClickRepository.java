@@ -13,14 +13,11 @@ import java.util.Map;
 @Repository
 public interface LinkClickRepository extends JpaRepository<LinkClick, Long> {
 
-       // Общее количество кликов по alias
        long countByAlias(String alias);
 
-       // Уникальные клики (по IP hash)
        @Query("SELECT COUNT(DISTINCT lc.ipHash) FROM LinkClick lc WHERE lc.alias = :alias")
        long countUniqueClicksByAlias(@Param("alias") String alias);
 
-       // Клики за период
        @Query("SELECT lc FROM LinkClick lc WHERE lc.alias = :alias " +
               "AND lc.clickedAt BETWEEN :startDate AND :endDate " +
               "ORDER BY lc.clickedAt DESC")
@@ -30,26 +27,22 @@ public interface LinkClickRepository extends JpaRepository<LinkClick, Long> {
               @Param("endDate") LocalDateTime endDate
        );
 
-       // Статистика по браузерам
        @Query("SELECT lc.browser as browser, COUNT(lc) as count " +
               "FROM LinkClick lc WHERE lc.alias = :alias " +
               "GROUP BY lc.browser ORDER BY count DESC")
        List<Map<String, Object>> getBrowserStats(@Param("alias") String alias);
 
-       // Статистика по устройствам
        @Query("SELECT lc.deviceType as deviceType, COUNT(lc) as count " +
               "FROM LinkClick lc WHERE lc.alias = :alias " +
               "GROUP BY lc.deviceType ORDER BY count DESC")
        List<Map<String, Object>> getDeviceStats(@Param("alias") String alias);
 
-       // Статистика кликов по месяцам
        @Query("SELECT FUNCTION('DATE_TRUNC', 'month', lc.clickedAt) as month, COUNT(lc) as count " +
               "FROM LinkClick lc WHERE lc.alias = :alias " +
               "GROUP BY FUNCTION('DATE_TRUNC', 'month', lc.clickedAt) " +
               "ORDER BY month DESC")
        List<Map<String, Object>> getClicksByMonth(@Param("alias") String alias);
 
-       // Статистика кликов по дням (последние N дней)
        @Query("SELECT FUNCTION('DATE', lc.clickedAt) as date, COUNT(lc) as count " +
               "FROM LinkClick lc WHERE lc.alias = :alias " +
               "AND lc.clickedAt >= :startDate " +
@@ -60,7 +53,6 @@ public interface LinkClickRepository extends JpaRepository<LinkClick, Long> {
               @Param("startDate") LocalDateTime startDate
        );
 
-       // Топ referrers
        @Query("SELECT lc.referer as referer, COUNT(lc) as count " +
               "FROM LinkClick lc WHERE lc.alias = :alias AND lc.referer IS NOT NULL " +
               "GROUP BY lc.referer ORDER BY count DESC")

@@ -29,18 +29,15 @@ public class UserAgentParserService {
         try {
             UserAgent userAgent = UserAgent.parseUserAgentString(userAgentString);
 
-            // Browser
             Browser browser = userAgent.getBrowser();
             result.put("browser", browser.getName());
             result.put("browserVersion", userAgent.getBrowserVersion() != null 
                 ? userAgent.getBrowserVersion().getVersion() 
                 : "Unknown");
 
-            // Operating System
             OperatingSystem os = userAgent.getOperatingSystem();
             result.put("operatingSystem", os.getName());
 
-            // Device Type
             DeviceType deviceType = os.getDeviceType();
             result.put("deviceType", mapDeviceType(deviceType));
 
